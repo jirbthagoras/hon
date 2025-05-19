@@ -17,5 +17,6 @@ func NewConfig() *viper.Viper {
 		panic(err)
 	}
 
+	// Return the config
 	return config
 }
