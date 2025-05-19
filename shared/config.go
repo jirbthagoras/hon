@@ -1,7 +1,21 @@
 package shared
 
-import "fmt"
+import "github.com/spf13/viper"
 
-func Hello() {
-	fmt.Println("Hello Config")
+func NewConfig() *viper.Viper {
+	// Initiate new viper instance
+	config := viper.New()
+
+	// Configuration stuff
+	config.SetConfigFile(".env")
+	config.AddConfigPath("../")
+	config.AutomaticEnv()
+
+	// Read the config
+	err := config.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	return config
 }
