@@ -1,22 +1,37 @@
 package shared
 
-import "github.com/spf13/viper"
+import (
+	"log/slog"
+	"os"
+	"sync"
+
+	"github.com/spf13/viper"
+)
+
+var (
+	config     *viper.Viper
+	configOnce sync.Once
+)
 
 func NewConfig() *viper.Viper {
-	// Initiate new viper instance
-	config := viper.New()
+	configOnce.Do(func() {
+		slog.Debug("Initiate new config")
+		newConfig := viper.New()
 
-	// Configuration stuff
-	config.SetConfigFile(".env")
-	config.AddConfigPath("../")
-	config.AutomaticEnv()
+		configFile := "../.env"
+		if _, err := os.Stat(configFile); err == nil {
+			slog.Debug(".env file found, using .env file")
+			newConfig.SetConfigFile(configFile)
 
-	// Read the config
-	err := config.ReadInConfig()
-	if err != nil {
-		panic(err)
-	}
+			if err := newConfig.ReadInConfig(); err != nil {
+				panic(err) // Consider logging instead of panicking in production
+			}
+		}
 
-	// Return the config
+		newConfig.AutomaticEnv()
+		config = newConfig
+	})
+
+	slog.Debug("Returning cached config")
 	return config
 }
