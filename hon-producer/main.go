@@ -1,13 +1,31 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
+	"os"
 
+	"github.com/go-playground/validator/v10"
+	"github.com/gofiber/fiber/v2"
 	"github.com/jirbthagoras/hon/shared"
 )
 
 func main() {
-	fmt.Println(shared.NewConfig().GetString("JWT_SECRET_KEY"))
-	fmt.Println(shared.NewConfig().GetString("DB_NAME"))
-	fmt.Println(shared.NewConfig().GetString("FOO"))
+	// Creates some dependencies
+	validate := validator.New()
+	sql := shared.GetConnection()
+	producerService := NewProducerService(sql)
+
+	// creates a server
+	server := fiber.New(fiber.Config{
+		ErrorHandler: shared.ErrorHandler,
+	})
+
+	producerHandlers := NewProducerHandler(validate, producerService)
+	app := server.Group("/api/user")
+	producerHandlers.RegisterRoutes(app)
+
+	if err := server.Listen(":3000"); err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
 }
