@@ -1,7 +1,13 @@
 package main
 
-import "github.com/jirbthagoras/hon/shared"
+import (
+	"fmt"
+
+	"github.com/jirbthagoras/hon/shared"
+)
 
 func main() {
-	shared.Hello()
+	fmt.Println(shared.NewConfig().GetString("JWT_SECRET_KEY"))
+	fmt.Println(shared.NewConfig().GetString("DB_NAME"))
+	fmt.Println(shared.NewConfig().GetString("FOO"))
 }
