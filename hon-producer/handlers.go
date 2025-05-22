@@ -20,8 +20,13 @@ func NewProducerHandler(v *validator.Validate, s *ProducerService) *ProducerHand
 }
 
 func (h *ProducerHandler) RegisterRoutes(router fiber.Router) {
-	router.Post("/register", h.handleRegister)
-	router.Post("/login", h.handleLogin)
+	auth := router.Group("/auth")
+	auth.Post("/register", h.handleRegister)
+	auth.Post("/login", h.handleLogin)
+
+	book := router.Group("/book")
+	book.Use(shared.TokenMiddleware)
+	book.Post("/", h.handleAddBook)
 }
 
 func (h *ProducerHandler) handleRegister(c *fiber.Ctx) error {
@@ -88,7 +93,42 @@ func (h *ProducerHandler) handleLogin(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Create user success",
+		"message": "Login Success, here's your token",
 		"token":   token,
+	})
+}
+
+func (h *ProducerHandler) handleAddBook(c *fiber.Ctx) error {
+	// initializing
+	req := &RequestCreateBook{}
+	// Getting subject (which is email) from token to inject it into service.
+	email, err := shared.GetSubjectFromToken(c)
+	if err != nil {
+		return err
+	}
+	// because the DTO already have a field of email, why not fill it?
+	req.Email = email
+
+	// parse the body
+	err = c.BodyParser(req)
+	if err != nil {
+		slog.Error("Error while parsing body", "err", err)
+		return err
+	}
+
+	// validate
+	err = h.Validator.Struct(req)
+	if err != nil && errors.As(err, &validator.ValidationErrors{}) {
+		return shared.NewFailedValidationError(*req, err.(validator.ValidationErrors))
+	}
+
+	// calling the service, look inside service for more detailed code
+	err = h.Service.CreateBook(*req)
+	if err != nil {
+		return err
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Create book success",
 	})
 }

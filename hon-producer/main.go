@@ -21,7 +21,7 @@ func main() {
 	})
 
 	producerHandlers := NewProducerHandler(validate, producerService)
-	app := server.Group("/api/user")
+	app := server.Group("/api")
 	producerHandlers.RegisterRoutes(app)
 
 	if err := server.Listen(":3000"); err != nil {
