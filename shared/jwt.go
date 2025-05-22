@@ -34,12 +34,7 @@ func TokenMiddleware(c *fiber.Ctx) error {
 	}
 
 	// validate the token
-	token, err := ValidateToken(jwtToken)
-	// because token is *jwt.Token, it can be vaidated with token.Valid
-	if err != nil || !token.Valid {
-		slog.Error("Error validating token", "err", err)
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
-	}
+	_, _, err = ValidateToken(jwtToken)
 
 	return c.Next()
 }
@@ -63,14 +58,24 @@ func GenerateToken(email string, expiry time.Time) (string, error) {
 	return token.SignedString(secret)
 }
 
-func ValidateToken(token string) (*jwt.Token, error) {
-	return jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+func ValidateToken(tokenStr string) (*jwt.Token, *jwt.RegisteredClaims, error) {
+	// Create a instance or new claims to make sure if the parsed claims are type of RegisteredClaims
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		// Validate the algorithm
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		// Return the secret key for validation
 		return getSecretKey(), nil
 	})
+
+	// Checks if the token valid.
+	if err != nil || !token.Valid {
+		return nil, nil, fmt.Errorf("invalid token")
+	}
+
+	return token, claims, nil
 }
 
 func getTokenFromRequest(c *fiber.Ctx) (string, error) {
@@ -93,11 +98,11 @@ func GetSubjectFromToken(c *fiber.Ctx) (string, error) {
 	}
 
 	// validate token and get the subject a.k.a email
-	claims, err := ValidateToken(token)
+	_, claims, err := ValidateToken(token)
 	if err != nil {
 		return token, fiber.NewError(fiber.StatusUnauthorized, err.Error())
 	}
 
 	// exract the underlzying subject using type assertion
-	return claims.Claims.(*jwt.RegisteredClaims).Subject, nil
+	return claims.Subject, nil
 }

@@ -100,7 +100,7 @@ func (h *ProducerHandler) handleLogin(c *fiber.Ctx) error {
 
 func (h *ProducerHandler) handleAddBook(c *fiber.Ctx) error {
 	// initializing
-	req := &RequestCreateBook{}
+	req := &RequestCeateBook{}
 	// Getting subject (which is email) from token to inject it into service.
 	email, err := shared.GetSubjectFromToken(c)
 	if err != nil {
