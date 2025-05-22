@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -35,14 +36,17 @@ func TokenMiddleware(c *fiber.Ctx) error {
 
 	// validate the token
 	_, _, err = ValidateToken(jwtToken)
+	if err != nil {
+		return fiber.NewError(fiber.StatusUnauthorized, "Token Invalid")
+	}
 
 	return c.Next()
 }
 
-func GenerateToken(email string, expiry time.Time) (string, error) {
+func GenerateToken(id int, expiry time.Time) (string, error) {
 	// Make a claim to register, using email as a subject cause why not?
 	claims := jwt.RegisteredClaims{
-		Subject:   email,
+		Subject:   strconv.Itoa(id),
 		Issuer:    "Hon",
 		ExpiresAt: jwt.NewNumericDate(expiry),
 		NotBefore: jwt.NewNumericDate(time.Now()),
@@ -84,25 +88,30 @@ func getTokenFromRequest(c *fiber.Ctx) (string, error) {
 
 	// checks if the token empty or nah
 	if token == "" {
-		return token, fiber.NewError(fiber.StatusUnauthorized, "No Token")
+		return token, fiber.NewError(fiber.StatusUnauthorized, "Token Not Found")
 	}
 
 	return token, nil
 }
 
-func GetSubjectFromToken(c *fiber.Ctx) (string, error) {
+func GetSubjectFromToken(c *fiber.Ctx) (int, error) {
 	// get token with function
 	token, err := getTokenFromRequest(c)
 	if err != nil {
-		return token, fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		return 0, fiber.NewError(fiber.StatusUnauthorized, err.Error())
 	}
 
 	// validate token and get the subject a.k.a email
 	_, claims, err := ValidateToken(token)
 	if err != nil {
-		return token, fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		return 0, fiber.NewError(fiber.StatusUnauthorized, err.Error())
 	}
 
-	// exract the underlzying subject using type assertion
-	return claims.Subject, nil
+	// converts from string to int
+	id, err := strconv.Atoi(claims.Subject)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
