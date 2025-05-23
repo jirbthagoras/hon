@@ -16,6 +16,13 @@ type ResponseGetBook struct {
 	Id         int    `json:"id"`
 	Title      string `json:"title"`
 	Author     string `json:"author"`
-	TotalPages string `json:"total_pages"`
+	TotalPages int    `json:"total_pages"`
 	Status     string `json:"status"`
+}
+
+type RequestCreateProgress struct {
+	UserId      int
+	BookId      int
+	UntilPage   int    `json:"until_page" validate:"required"`
+	Description string `json:"description" validate:"required"`
 }

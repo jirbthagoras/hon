@@ -30,6 +30,7 @@ func (h *ProducerHandler) RegisterRoutes(router fiber.Router) {
 	book.Post("/", h.handleAddBook)
 	book.Get("/", h.handleGetBook)
 	book.Get("/:id", h.handleGetBookById)
+	book.Delete("/:id", h.handleDeleteBookById)
 }
 
 func (h *ProducerHandler) handleRegister(c *fiber.Ctx) error {
@@ -181,5 +182,31 @@ func (h *ProducerHandler) handleGetBookById(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Query Book Success",
 		"books":   book,
+	})
+}
+
+func (h *ProducerHandler) handleDeleteBookById(c *fiber.Ctx) error {
+	// Taking id from params
+	bookId, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return err
+	}
+
+	// Getting subject (which is user_id) from token to inject it into service.
+	userId, err := shared.GetSubjectFromToken(c)
+	if err != nil {
+		slog.Error("Error while getting token", "err", err)
+		return err
+	}
+
+	// calls service
+	err = h.Service.DeleteBookById(bookId, userId)
+	if err != nil {
+		slog.Error("Error while executing service", "err", err)
+		return err
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Book deleted",
 	})
 }
