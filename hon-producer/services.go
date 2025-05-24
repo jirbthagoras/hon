@@ -264,7 +264,7 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Sorry but you're already finished your book!")
 	}
 
-	// checks if it's exceeds book page
+	// checks if it's exceeds book pag
 	if req.UntilPage > book.TotalPages {
 		return fiber.NewError(fiber.StatusBadRequest, "Until Page exceeds book's page")
 	}
