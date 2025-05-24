@@ -204,7 +204,42 @@ func (s *ProducerService) DeleteBookById(bookId int, userId int) error {
 	// checks the affected row to make sure if there is in fact deleted book
 	rowsAffected, err := result.RowsAffected()
 	if err != nil && rowsAffected == 0 {
+		slog.Error("Failed, no rows affected")
 		return fiber.NewError(fiber.StatusBadRequest, "Delete failed, book probably does not exist")
+	}
+
+	return nil
+}
+
+func (s *ProducerService) SetBookStatus(bookId int, status string) error {
+	if status != "reading" && status != "completed" {
+		slog.Error("Status invalid")
+		return fiber.NewError(fiber.StatusInternalServerError, "Internal server error")
+	}
+
+	// Create a query
+	query := "UPDATE books SET status = ? WHERE id = ?"
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return err
+	}
+
+	// Execute the query with ExecContext
+	result, err := tx.ExecContext(context.Background(), query, status, bookId)
+	if err != nil {
+		slog.Error("Error while inserting data", "err", err)
+		return err
+	}
+
+	// checks the affected row to make sure if there is in fact updated book
+	rowsAffected, err := result.RowsAffected()
+	if err != nil && rowsAffected == 0 {
+		slog.Error("Failed, no rows affected")
+		return fiber.NewError(fiber.StatusBadRequest, "Update failed, no rows affected")
 	}
 
 	return nil
@@ -213,7 +248,7 @@ func (s *ProducerService) DeleteBookById(bookId int, userId int) error {
 // PROGRESSES
 func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 	// Acquire latest progress for validation purpose (make sure if the FROM_PAGE and UNTIl_PAGE is right)
-	progress, err := s.getLatestProgress(req.BookId)
+	previousProgress, err := s.getLatestProgress(req.BookId)
 	if err != nil {
 		return err
 	}
@@ -224,15 +259,33 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 		return err
 	}
 
-	if book.TotalPages == req.UntilPage {
+	// checks if the book already finished?
+	if book.Status == "completed" {
+		return fiber.NewError(fiber.StatusBadRequest, "Sorry but you're already finished your book!")
+	}
 
+	// checks if it's exceeds book page
+	if req.UntilPage > book.TotalPages {
+		return fiber.NewError(fiber.StatusBadRequest, "Until Page exceeds book's page")
+	}
+
+	// checks if it's maxed out or nah
+	if book.TotalPages == req.UntilPage {
+		err := s.SetBookStatus(book.Id, "completed")
+		if err != nil {
+			return err
+		}
 	}
 
 	// If latest progress exist, take it's until_page as new progress' from_page.
 	// if not, then it's the first page.
 	fromPage := 0
-	if progress != nil {
-		fromPage = progress.UntilPage
+	if previousProgress != nil {
+		fromPage = previousProgress.UntilPage
+	}
+
+	if previousProgress.UntilPage >= req.UntilPage {
+		return fiber.NewError(fiber.StatusBadRequest, "Current until_page is lesser or same as previous until_page, no improvement")
 	}
 
 	// Create a query
@@ -272,7 +325,7 @@ func (s *ProducerService) getLatestProgress(bookId int) (*Progress, error) {
 	}
 
 	// Query and checks if the progress exists
-	err = tx.QueryRowContext(context.Background(), query, bookId, progress.BookId).Scan(
+	err = tx.QueryRowContext(context.Background(), query, bookId).Scan(
 		&progress.Id,
 		&progress.BookId,
 		&progress.FromPage,
@@ -282,7 +335,7 @@ func (s *ProducerService) getLatestProgress(bookId int) (*Progress, error) {
 	// if its empty, that's OKAY! Cuz it's the first progress
 	if err != nil {
 		if err == sql.ErrNoRows {
-			slog.Info("This is the first progress of book!", "err", err)
+			slog.Info("This is the first progress of book!")
 			return nil, nil
 		}
 	}

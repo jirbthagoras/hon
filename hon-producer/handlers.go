@@ -31,6 +31,9 @@ func (h *ProducerHandler) RegisterRoutes(router fiber.Router) {
 	book.Get("/", h.handleGetBook)
 	book.Get("/:id", h.handleGetBookById)
 	book.Delete("/:id", h.handleDeleteBookById)
+
+	progress := router.Group("/progress")
+	progress.Post("/:id", h.handleCreateProgress)
 }
 
 func (h *ProducerHandler) handleRegister(c *fiber.Ctx) error {
@@ -209,4 +212,42 @@ func (h *ProducerHandler) handleDeleteBookById(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Book deleted",
 	})
+}
+
+func (h *ProducerHandler) handleCreateProgress(c *fiber.Ctx) error {
+	// Init some vars
+	req := &RequestCreateProgress{}
+
+	// Taking id from params
+	bookId, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return err
+	}
+	req.BookId = bookId
+
+	// Getting subject (which is user_id) from token to inject it into service.
+	userId, err := shared.GetSubjectFromToken(c)
+	if err != nil {
+		slog.Error("Error while getting token", "err", err)
+		return err
+	}
+	req.UserId = userId
+
+	// parse the body
+	err = c.BodyParser(req)
+	if err != nil {
+		slog.Error("Error while parsing body", "err", err)
+		return err
+	}
+
+	// calls service
+	err = h.Service.CreateProgress(*req)
+	if err != nil {
+		return err
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Progress successfully created",
+	})
+
 }
