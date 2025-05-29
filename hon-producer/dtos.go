@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 type RequestAuthUser struct {
 	Id       int
 	Email    string `json:"email" validate:"required,email"`
@@ -13,11 +15,12 @@ type RequestCreateBook struct {
 }
 
 type ResponseGetBook struct {
-	Id         int    `json:"id"`
-	Title      string `json:"title"`
-	Author     string `json:"author"`
-	TotalPages int    `json:"total_pages"`
-	Status     string `json:"status"`
+	Id         int                    `json:"id"`
+	Title      string                 `json:"title"`
+	Author     string                 `json:"author"`
+	TotalPages int                    `json:"total_pages"`
+	Status     string                 `json:"status"`
+	Progresses []*ResponseGetProgress `json:"progresses"`
 }
 
 type RequestCreateProgress struct {
@@ -25,4 +28,12 @@ type RequestCreateProgress struct {
 	BookId      int
 	UntilPage   int    `json:"until_page" validate:"required"`
 	Description string `json:"description" validate:"required"`
+}
+
+type ResponseGetProgress struct {
+	Id          int       `json:"id"`
+	FromPage    int       `json:"from_page"`
+	UntilPage   int       `json:"until_page"`
+	CreatedAt   time.Time `json:"created_at"`
+	Description string    `json:"Description"`
 }

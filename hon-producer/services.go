@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jirbthagoras/hon/shared"
@@ -203,7 +204,10 @@ func (s *ProducerService) DeleteBookById(bookId int, userId int) error {
 
 	// checks the affected row to make sure if there is in fact deleted book
 	rowsAffected, err := result.RowsAffected()
-	if err != nil && rowsAffected == 0 {
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
 		slog.Error("Failed, no rows affected")
 		return fiber.NewError(fiber.StatusBadRequest, "Delete failed, book probably does not exist")
 	}
@@ -237,7 +241,10 @@ func (s *ProducerService) SetBookStatus(bookId int, status string) error {
 
 	// checks the affected row to make sure if there is in fact updated book
 	rowsAffected, err := result.RowsAffected()
-	if err != nil && rowsAffected == 0 {
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
 		slog.Error("Failed, no rows affected")
 		return fiber.NewError(fiber.StatusBadRequest, "Update failed, no rows affected")
 	}
@@ -331,14 +338,101 @@ func (s *ProducerService) getLatestProgress(bookId int) (*Progress, error) {
 		&progress.FromPage,
 		&progress.UntilPage,
 		&progress.Description,
-		&progress.CreatedAt)
+		&progress.CreatedAt,
+	)
 	// if its empty, that's OKAY! Cuz it's the first progress
 	if err != nil {
 		if err == sql.ErrNoRows {
 			slog.Info("This is the first progress of book!")
-			return nil, nil
+			return &progress, nil
 		}
 	}
 
 	return &progress, nil
+}
+
+func (s *ProducerService) GetProgressesByBookId(bookId int) ([]*ResponseGetProgress, error) {
+	var progresses []*ResponseGetProgress
+
+	// Create a query
+	query := "SELECT id, from_page, until_page, created_at, description FROM progresses WHERE book_id = ?"
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return nil, err
+	}
+
+	// Query
+	rows, err := tx.QueryContext(context.Background(), query, bookId)
+	if err != nil {
+		slog.Error("Eror while query", "err", err)
+		return nil, err
+	}
+
+	// close the rows of course
+	defer rows.Close()
+
+	// Foreach-ing queried rows
+	for rows.Next() {
+		var progress ResponseGetProgress
+		err := rows.Scan(&progress.Id, &progress.FromPage, &progress.UntilPage, &progress.CreatedAt, &progress.Description)
+		if err != nil {
+			slog.Error("Error querying", "err", err)
+			return nil, err
+		}
+		progresses = append(progresses, &progress)
+	}
+
+	return progresses, err
+}
+
+func (s *ProducerService) DeleteLatestProgress(bookId int, userId int) error {
+	// fetch latest progress
+	progress, err := s.getLatestProgress(bookId)
+	if err != nil {
+		return err
+	}
+
+	expiry := progress.CreatedAt.Add(24 * time.Hour)
+	if !time.Now().Before(expiry) {
+		slog.Error("Cannot delete progress that already created in 24 hours")
+		return fiber.NewError(fiber.StatusBadRequest, "Cannot delete progress that already created in 24 hours")
+	}
+
+	// Get book to access the status
+	book, err := s.GetBookById(bookId, userId)
+	if err != nil {
+		return err
+	}
+
+	// if the book status completed, change the status to reading
+	if book.Status == "completed" {
+		err := s.SetBookStatus(bookId, "reading")
+		if err != nil {
+			return err
+		}
+	}
+
+	// query
+	query := "DELETE FROM progresses WHERE id = ?"
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return err
+	}
+
+	// Execute the query with ExecContext
+	_, err = tx.ExecContext(context.Background(), query, progress.Id)
+	if err != nil {
+		slog.Error("Error while inserting data", "err", err)
+		return err
+	}
+
+	return nil
 }
