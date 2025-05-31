@@ -33,10 +33,12 @@ CREATE TABLE progresses (
 CREATE TABLE goals (
                        id BIGINT AUTO_INCREMENT,
                        book_id BIGINT NOT NULL,
+                       user_id BIGINT NOT NULL,
                        name VARCHAR(255),
                        target_page INT,
-                       finished BOOLEAN DEFAULT FALSE,
+                       status ENUM('finished', 'in-progress', 'expired') DEFAULT 'in-progress',
                        expired_at DATETIME,
                        FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+                       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                        PRIMARY KEY(id)
 );

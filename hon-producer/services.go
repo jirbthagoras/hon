@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -21,12 +22,18 @@ func NewProducerService(db *sql.DB) *ProducerService {
 
 // USERS
 
-func (s *ProducerService) GetUserByEmail(email string) (*User, error) {
+func (s *ProducerService) GetUser(identifier string) (*User, error) {
+	// Decide whether identifier is email or id
+	var field = "id"
+	if strings.Contains(identifier, "@") {
+		field = "email"
+	}
+
 	// init some vars
 	var user User
 
 	// Create a query
-	query := "SELECT * FROM users WHERE email = ?"
+	query := "SELECT * FROM users WHERE ? = ?"
 
 	// tx stuffs
 	tx, err := s.DB.Begin()
@@ -37,7 +44,7 @@ func (s *ProducerService) GetUserByEmail(email string) (*User, error) {
 	}
 
 	// Query and checks if the user with such email exists or nah
-	err = tx.QueryRowContext(context.Background(), query, email).Scan(&user.Id, &user.Email, &user.Password)
+	err = tx.QueryRowContext(context.Background(), query, field, identifier).Scan(&user.Id, &user.Email, &user.Password)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			slog.Error("User not found", "err", err)
@@ -79,7 +86,7 @@ func (s *ProducerService) CreateUser(req RequestAuthUser) (int, error) {
 
 func (s *ProducerService) UserLogin(req RequestAuthUser) (int, error) {
 	// init some vars
-	user, err := s.GetUserByEmail(req.Email)
+	user, err := s.GetUser(req.Email)
 	if err != nil {
 		return 0, nil
 	}
@@ -121,7 +128,6 @@ func (s *ProducerService) GetAllBooksByUserId(userId int) ([]*ResponseGetBook, e
 	var books []*ResponseGetBook
 
 	// Query
-
 	query := "SELECT id, title, author, total_pages, status FROM books WHERE user_id = ?"
 
 	// tx stuffs
@@ -278,10 +284,13 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 
 	// checks if it's maxed out or nah
 	if book.TotalPages == req.UntilPage {
+		// Set the book status to completed
 		err := s.SetBookStatus(book.Id, "completed")
 		if err != nil {
 			return err
 		}
+
+		// Checks if this progress fulfilled a goal or not
 	}
 
 	// If latest progress exist, take it's until_page as new progress' from_page.
@@ -351,7 +360,7 @@ func (s *ProducerService) getLatestProgress(bookId int) (*Progress, error) {
 	return &progress, nil
 }
 
-func (s *ProducerService) GetProgressesByBookId(bookId int) ([]*ResponseGetProgress, error) {
+func (s *ProducerService) GetAllProgressByBookId(bookId int) ([]*ResponseGetProgress, error) {
 	var progresses []*ResponseGetProgress
 
 	// Create a query
@@ -396,9 +405,10 @@ func (s *ProducerService) DeleteLatestProgress(bookId int, userId int) error {
 		return err
 	}
 
-	expiry := progress.CreatedAt.Add(24 * time.Hour)
+	// checks if the time of deletion is still valid
+	expiry := progress.CreatedAt.Add(1 * time.Minute)
 	if !time.Now().Before(expiry) {
-		slog.Error("Cannot delete progress that already created in 24 hours")
+		slog.Error("Cannot delete progress that already created in 1 minute")
 		return fiber.NewError(fiber.StatusBadRequest, "Cannot delete progress that already created in 24 hours")
 	}
 
@@ -432,6 +442,117 @@ func (s *ProducerService) DeleteLatestProgress(bookId int, userId int) error {
 	if err != nil {
 		slog.Error("Error while inserting data", "err", err)
 		return err
+	}
+
+	return nil
+}
+
+// GOALS
+
+func (s *ProducerService) CreateGoal(req *RequestCreateGoal) error {
+	// Create a query
+	query := "INSERT INTO goals (book_id, user_id, name, target_page, expired_at) VALUES (?, ?, ?, ?, ?)"
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return err
+	}
+
+	// Execute the query with ExecContext
+	_, err = tx.ExecContext(context.Background(), query,
+		req.BookId,
+		req.UserId,
+		req.Name,
+		req.TargetPage,
+		req.ExpiredAt)
+
+	if err != nil {
+		slog.Error("Error while inserting data", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *ProducerService) GetAllGoals(bookId int, userId int) ([]*ResponseGetGoal, error) {
+	// Initialize var to place the book
+	var goals []*ResponseGetGoal
+
+	// Query
+	query := "SELECT id, name, target_page, status, expired_at FROM goals WHERE book_id = ? & user_id = ?"
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return nil, err
+	}
+
+	// Query
+	rows, err := tx.QueryContext(context.Background(), query, userId)
+	if err != nil {
+		slog.Error("Eror while query", "err", err)
+		return nil, err
+	}
+
+	// close the rows of course
+	defer rows.Close()
+
+	for rows.Next() {
+		var goal ResponseGetGoal
+		err := rows.Scan(
+			&goal.Id,
+			&goal.Name,
+			&goal.TargetPage,
+			&goal.Status,
+			&goal.ExpiredAt,
+		)
+		if err != nil {
+			slog.Error("Error Querying")
+			return goals, err
+		}
+		goals = append(goals, &goal)
+	}
+
+	return goals, nil
+}
+
+func (s *ProducerService) SetGoalStatus(status string, goalId int) error {
+	if status != "finished" && status != "expired" {
+		slog.Error("Status invalid")
+		return fiber.NewError(fiber.StatusInternalServerError, "Internal server error")
+	}
+
+	// Create a query
+	query := "UPDATE goals SET status = ? WHERE id = ?"
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return err
+	}
+
+	// Execute the query with ExecContext
+	result, err := tx.ExecContext(context.Background(), query, status, goalId)
+	if err != nil {
+		slog.Error("Error while inserting data", "err", err)
+		return err
+	}
+
+	// checks the affected row to make sure if there is in fact updated book
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		slog.Error("Failed, no rows affected")
+		return fiber.NewError(fiber.StatusBadRequest, "Update failed, no rows affected")
 	}
 
 	return nil

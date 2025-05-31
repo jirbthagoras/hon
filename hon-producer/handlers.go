@@ -35,6 +35,9 @@ func (h *ProducerHandler) RegisterRoutes(router fiber.Router) {
 	progress := router.Group("/progress")
 	progress.Post("/:id", h.handleCreateProgress)
 	progress.Delete("/:id", h.handleCancelProgress)
+
+	goals := router.Group("/goal")
+	goals.Post("/", h.handleCreateGoal)
 }
 
 func (h *ProducerHandler) handleRegister(c *fiber.Ctx) error {
@@ -184,7 +187,7 @@ func (h *ProducerHandler) handleGetBookById(c *fiber.Ctx) error {
 	}
 
 	// calls service for progresses
-	progresses, err := h.Service.GetProgressesByBookId(bookId)
+	progresses, err := h.Service.GetAllProgressByBookId(bookId)
 	if err != nil {
 		slog.Error("Error while executing service: GetProgress", "err", err)
 		return err
@@ -284,5 +287,44 @@ func (h *ProducerHandler) handleCancelProgress(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Latest progress successfully deleted",
+	})
+}
+
+func (h *ProducerHandler) handleCreateGoal(c *fiber.Ctx) error {
+	// Init some var
+	req := &RequestCreateGoal{}
+
+	// Parse the payload
+	err := c.BodyParser(req)
+	if err != nil {
+		slog.Error("Error while parsing body", "err", err)
+		return err
+	}
+
+	// Taking id from params
+	bookId, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return err
+	}
+	req.BookId = bookId
+
+	// Getting subject (which is user_id) from token to inject it into service.
+	userId, err := shared.GetSubjectFromToken(c)
+	if err != nil {
+		slog.Error("Error while getting token", "err", err)
+		return err
+	}
+	req.UserId = userId
+
+	// calls service
+	err = h.Service.CreateGoal(req)
+	if err != nil {
+		slog.Error("Something wrong when called the service")
+		return err
+	}
+
+	// Returns
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Goal created successfully",
 	})
 }

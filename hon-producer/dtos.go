@@ -37,3 +37,20 @@ type ResponseGetProgress struct {
 	CreatedAt   time.Time `json:"created_at"`
 	Description string    `json:"Description"`
 }
+
+type RequestCreateGoal struct {
+	Id         int
+	UserId     int
+	BookId     int
+	Name       string    `json:"name" validate:"required,min=3"`
+	TargetPage int       `json:"target_page" validate:"required"`
+	ExpiredAt  time.Time `json:"expired_at" validate:"required"`
+}
+
+type ResponseGetGoal struct {
+	Id         int
+	Name       string    `json:"name"`
+	TargetPage int       `json:"target_page"`
+	Status     string    `json:"status"`
+	ExpiredAt  time.Time `json:"expired_at"`
+}
