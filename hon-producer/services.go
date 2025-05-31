@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -263,6 +265,7 @@ func (s *ProducerService) SetBookStatus(bookId int, status string) error {
 
 // PROGRESSES
 func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
+
 	// Acquire latest progress for validation purpose (make sure if the FROM_PAGE and UNTIl_PAGE is right)
 	previousProgress, err := s.getLatestProgress(req.BookId)
 	if err != nil {
@@ -303,9 +306,9 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 		return err
 	}
 
-	// Checks all goals cihuy
+	// Checks all goals
 	for _, goal := range goals {
-		// Continue the loop if goal's status finished
+		// Skip if goal's status finished
 		if goal.Status == "finished" {
 			continue
 		}
@@ -315,8 +318,27 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 			if err != nil {
 				return err
 			}
+
+			user, err := s.GetUser(strconv.Itoa(req.UserId))
+			if err != nil {
+				return err
+			}
+
+			msg := &GoalMsg{
+				Id:         goal.Id,
+				Email:      user.Email,
+				Name:       goal.Name,
+				TargetPage: goal.TargetPage,
+				ExpiredAt:  goal.ExpiredAt,
+			}
+
+			body, err := json.Marshal(msg)
+			if err != nil {
+				return err
+			}
+
 			// Send the message to exchange
-			err = s.sendGoalMessage()
+			err = s.sendGoalMessage(body)
 			if err != nil {
 				return err
 			}
@@ -355,7 +377,7 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 	return nil
 }
 
-func (s *ProducerService) sendGoalMessage() error {
+func (s *ProducerService) sendGoalMessage(body []byte) error {
 	// Make agent
 	agent, err := shared.NewAgent(s.AMQP, context.Background())
 	if err != nil {
@@ -367,7 +389,7 @@ func (s *ProducerService) sendGoalMessage() error {
 		Headers: amqp091.Table{
 			"sample": "value",
 		},
-		Body: []byte("Hello From Service!"),
+		Body: body,
 	}, "goal_exchange", "goal")
 
 	if err != nil {
