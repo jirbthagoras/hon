@@ -41,7 +41,7 @@ type ResponseGetProgress struct {
 type RequestCreateGoal struct {
 	Id         int
 	UserId     int
-	BookId     int
+	BookId     int       `json:"book_id"`
 	Name       string    `json:"name" validate:"required,min=3"`
 	TargetPage int       `json:"target_page" validate:"required"`
 	ExpiredAt  time.Time `json:"expired_at" validate:"required"`

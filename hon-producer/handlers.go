@@ -33,10 +33,12 @@ func (h *ProducerHandler) RegisterRoutes(router fiber.Router) {
 	book.Delete("/:id", h.handleDeleteBookById)
 
 	progress := router.Group("/progress")
+	progress.Use(shared.TokenMiddleware)
 	progress.Post("/:id", h.handleCreateProgress)
 	progress.Delete("/:id", h.handleCancelProgress)
 
 	goals := router.Group("/goal")
+	goals.Use(shared.TokenMiddleware)
 	goals.Post("/", h.handleCreateGoal)
 }
 
@@ -253,6 +255,12 @@ func (h *ProducerHandler) handleCreateProgress(c *fiber.Ctx) error {
 		return err
 	}
 
+	// Validate
+	err = h.Validator.Struct(req)
+	if err != nil && errors.As(err, &validator.ValidationErrors{}) {
+		return shared.NewFailedValidationError(*req, err.(validator.ValidationErrors))
+	}
+
 	// calls service
 	err = h.Service.CreateProgress(*req)
 	if err != nil {
@@ -301,13 +309,6 @@ func (h *ProducerHandler) handleCreateGoal(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Taking id from params
-	bookId, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return err
-	}
-	req.BookId = bookId
-
 	// Getting subject (which is user_id) from token to inject it into service.
 	userId, err := shared.GetSubjectFromToken(c)
 	if err != nil {
@@ -315,6 +316,27 @@ func (h *ProducerHandler) handleCreateGoal(c *fiber.Ctx) error {
 		return err
 	}
 	req.UserId = userId
+
+	// Checks if the user hold the book
+	book, err := h.Service.GetBookById(req.BookId, req.UserId)
+	if err != nil {
+		return err
+	}
+
+	// Checks if the book is already finished
+	if book.Status == "completed" {
+		return fiber.NewError(fiber.StatusBadRequest, "Book already finished, nothing to chase bro")
+	}
+
+	progress, err := h.Service.getLatestProgress(book.Id)
+	if err != nil {
+		return err
+	}
+
+	// Checks if the target page exceeds book latest progress.
+	if progress.UntilPage >= req.TargetPage {
+		return fiber.NewError(fiber.StatusBadRequest, "Your target already fulfilled or maybe exceeds your latest progress")
+	}
 
 	// calls service
 	err = h.Service.CreateGoal(req)

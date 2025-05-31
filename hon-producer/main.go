@@ -13,7 +13,8 @@ func main() {
 	// Creates some dependencies
 	validate := validator.New()
 	sql := shared.GetConnection()
-	producerService := NewProducerService(sql)
+	amqp := shared.NewAMQPConnection()
+	producerService := NewProducerService(sql, amqp)
 
 	// creates a server
 	server := fiber.New(fiber.Config{
