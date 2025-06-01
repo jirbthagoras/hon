@@ -1,0 +1,18 @@
+{
+     "rabbit_version": "3.13.0",
+     "users": {
+          "name": "guest",
+          "password": "guest",
+          "tags": "administrator"
+     },
+     "vhosts": [ { "name": "/" } ],
+     "permissions": [
+          {
+               "user": "guest",
+               "vhost": "/",
+               "configure": ".*",
+               "write": ".*",
+               "read": ".*"
+          }
+     ]
+}
