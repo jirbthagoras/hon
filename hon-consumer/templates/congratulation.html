@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Congrats</title>
+<body>
+<div class="container">
+    <div class="header">
+        <h2 style="color: green;">Congrats!</h2>
+    </div>
+    <div class="content">
+        <p>Hello {{.Email}}!</p>
+    </div>
+    <div class="footer">
+        <p>Your goal: <strong>{{.Name}}</strong> on <strong>{{.BookTitle}}</strong> fulfilled perfectly!</p>
+        <p>Target Page: <strong>{{.TargetPage}}</strong></p>
+        <p>Estimated Time: <strong>{{.ExpiredAt}}</strong></p>
+    </div>
+    <div>
+        <p>Sincerely: Hon.</p>
+    </div>
+</div>
+</body>
+</html>
