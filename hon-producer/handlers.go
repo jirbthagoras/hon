@@ -317,27 +317,6 @@ func (h *ProducerHandler) handleCreateGoal(c *fiber.Ctx) error {
 	}
 	req.UserId = userId
 
-	// Checks if the user hold the book
-	book, err := h.Service.GetBookById(req.BookId, req.UserId)
-	if err != nil {
-		return err
-	}
-
-	// Checks if the book is already finished
-	if book.Status == "completed" {
-		return fiber.NewError(fiber.StatusBadRequest, "Book already finished, nothing to chase bro")
-	}
-
-	progress, err := h.Service.getLatestProgress(book.Id)
-	if err != nil {
-		return err
-	}
-
-	// Checks if the target page exceeds book latest progress.
-	if progress.UntilPage >= req.TargetPage {
-		return fiber.NewError(fiber.StatusBadRequest, "Your target already fulfilled or maybe exceeds your latest progress")
-	}
-
 	// calls service
 	err = h.Service.CreateGoal(req)
 	if err != nil {

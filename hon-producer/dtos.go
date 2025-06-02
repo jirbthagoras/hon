@@ -54,11 +54,3 @@ type ResponseGetGoal struct {
 	Status     string    `json:"status"`
 	ExpiredAt  time.Time `json:"expired_at"`
 }
-
-type GoalMsg struct {
-	Id         int       `json:"id"`
-	Email      string    `json:"email"`
-	Name       string    `json:"name"`
-	TargetPage int       `json:"target_page"`
-	ExpiredAt  time.Time `json:"expired_at"`
-}

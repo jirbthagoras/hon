@@ -309,7 +309,7 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 	// Checks all goals
 	for _, goal := range goals {
 		// Skip if goal's status finished
-		if goal.Status == "finished" {
+		if goal.Status != "in-progress" {
 			continue
 		}
 		if req.UntilPage >= goal.TargetPage {
@@ -324,10 +324,11 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 				return err
 			}
 
-			msg := &GoalMsg{
+			msg := &shared.Msg{
 				Id:         goal.Id,
 				Email:      user.Email,
 				Name:       goal.Name,
+				BookTitle:  book.Title,
 				TargetPage: goal.TargetPage,
 				ExpiredAt:  goal.ExpiredAt,
 			}
@@ -524,6 +525,33 @@ func (s *ProducerService) DeleteLatestProgress(bookId int, userId int) error {
 // GOALS
 
 func (s *ProducerService) CreateGoal(req *RequestCreateGoal) error {
+	// Checks if the user hold the book
+	book, err := s.GetBookById(req.BookId, req.UserId)
+	if err != nil {
+		return err
+	}
+
+	// Checks if the book is already finished
+	if book.Status == "completed" {
+		return fiber.NewError(fiber.StatusBadRequest, "Book already finished, nothing to chase bro")
+	}
+
+	// acquire latest progress
+	progress, err := s.getLatestProgress(book.Id)
+	if err != nil {
+		return err
+	}
+
+	// Checks if the target page exceeds book latest progress.
+	if progress.UntilPage >= req.TargetPage {
+		return fiber.NewError(fiber.StatusBadRequest, "Your target already fulfilled or maybe exceeds your latest progress")
+	}
+
+	// Validate the expired_time
+	if !time.Now().Before(req.ExpiredAt) {
+		return fiber.NewError(fiber.StatusBadRequest, "Expired Time is invalid")
+	}
+
 	// Create a query
 	query := "INSERT INTO goals (book_id, user_id, name, target_page, expired_at) VALUES (?, ?, ?, ?, ?)"
 
@@ -536,7 +564,7 @@ func (s *ProducerService) CreateGoal(req *RequestCreateGoal) error {
 	}
 
 	// Execute the query with ExecContext
-	_, err = tx.ExecContext(context.Background(), query,
+	result, err := tx.ExecContext(context.Background(), query,
 		req.BookId,
 		req.UserId,
 		req.Name,
@@ -545,6 +573,56 @@ func (s *ProducerService) CreateGoal(req *RequestCreateGoal) error {
 
 	if err != nil {
 		slog.Error("Error while inserting data", "err", err)
+		return err
+	}
+
+	lastInsertId, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	// Find a user first to get the email
+	user, err := s.GetUser(strconv.Itoa(req.UserId))
+	if err != nil {
+		return err
+	}
+
+	// Crafts a body
+	msg := &shared.Msg{
+		Id:         int(lastInsertId),
+		Email:      user.Email,
+		Name:       req.Name,
+		BookTitle:  book.Title,
+		TargetPage: req.TargetPage,
+		ExpiredAt:  req.ExpiredAt,
+	}
+
+	// Craft a delay time first, expired_time - now
+	delay := time.Until(msg.ExpiredAt)
+	slog.Info(strconv.Itoa(int(delay.Milliseconds())))
+
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	// Make agent to send delayed message to queue.
+	agent, err := shared.NewAgent(s.AMQP, context.Background())
+	if err != nil {
+		return err
+	}
+
+	// Publish the message
+	err = agent.Publish(amqp091.Publishing{
+		DeliveryMode: amqp091.Persistent,
+		ContentType:  "application/json",
+		Body:         body,
+		Headers: amqp091.Table{
+			"x-delay": delay.Milliseconds(), // delay in milliseconds
+		},
+	}, "goal_exchange", "deadline")
+
+	if err != nil {
 		return err
 	}
 
