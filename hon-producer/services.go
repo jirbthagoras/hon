@@ -300,7 +300,7 @@ func (s *ProducerService) CreateProgress(req RequestCreateProgress) error {
 	}
 
 	// Checks if the progress fulfilled a goal
-	goals, err := s.GetAllGoals(req.BookId, req.UserId)
+	goals, err := s.GetAllGoalsWithBookId(req.BookId, req.UserId)
 	if err != nil {
 		slog.Error("Calls GetAllGoals")
 		return err
@@ -629,12 +629,12 @@ func (s *ProducerService) CreateGoal(req *RequestCreateGoal) error {
 	return nil
 }
 
-func (s *ProducerService) GetAllGoals(bookId int, userId int) ([]*ResponseGetGoal, error) {
+func (s *ProducerService) GetAllGoalsWithBookId(bookId int, userId int) ([]*ResponseGetGoal, error) {
+	// Checks if the BookId exists
+	query := "SELECT id, name, target_page, status, expired_at FROM goals WHERE book_id && user_id = ?"
+
 	// Initialize var to place the book
 	var goals []*ResponseGetGoal
-
-	// Query
-	query := "SELECT id, name, target_page, status, expired_at FROM goals WHERE book_id = ? && user_id = ?"
 
 	// tx stuffs
 	tx, err := s.DB.Begin()
@@ -708,4 +708,48 @@ func (s *ProducerService) SetGoalStatus(status string, goalId int) error {
 	}
 
 	return nil
+}
+
+func (s *ProducerService) GetAllGoals(userId int) ([]*ResponseGetGoal, error) {
+	// Checks if the BookId exists
+	query := "SELECT id, name, target_page, status, expired_at FROM goals WHERE user_id = ?"
+
+	// Initialize var to place the book
+	var goals []*ResponseGetGoal
+
+	// tx stuffs
+	tx, err := s.DB.Begin()
+	defer shared.CommitOrRollback(tx, err)
+	if err != nil {
+		slog.Error("Commit Rollback error", "err", err)
+		return goals, err
+	}
+
+	// Query
+	rows, err := tx.QueryContext(context.Background(), query, userId)
+	if err != nil {
+		slog.Error("Eror while query", "err", err)
+		return goals, err
+	}
+
+	// close the rows of course
+	defer rows.Close()
+
+	for rows.Next() {
+		var goal ResponseGetGoal
+		err := rows.Scan(
+			&goal.Id,
+			&goal.Name,
+			&goal.TargetPage,
+			&goal.Status,
+			&goal.ExpiredAt,
+		)
+		if err != nil {
+			slog.Error("Error Querying")
+			return goals, err
+		}
+		goals = append(goals, &goal)
+	}
+
+	return goals, nil
 }

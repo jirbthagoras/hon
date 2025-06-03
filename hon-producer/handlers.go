@@ -40,6 +40,7 @@ func (h *ProducerHandler) RegisterRoutes(router fiber.Router) {
 	goals := router.Group("/goal")
 	goals.Use(shared.TokenMiddleware)
 	goals.Post("/", h.handleCreateGoal)
+	goals.Get("/", h.handleGetAllGoal)
 }
 
 func (h *ProducerHandler) handleRegister(c *fiber.Ctx) error {
@@ -327,5 +328,26 @@ func (h *ProducerHandler) handleCreateGoal(c *fiber.Ctx) error {
 	// Returns
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Goal created successfully",
+	})
+}
+
+func (h *ProducerHandler) handleGetAllGoal(c *fiber.Ctx) error {
+	// Getting subject (which is user_id) from token to inject it into service.
+	id, err := shared.GetSubjectFromToken(c)
+	if err != nil {
+		slog.Error("Error while getting token", "err", err)
+		return err
+	}
+
+	// Calling the service
+	books, err := h.Service.GetAllGoals(id)
+	if err != nil {
+		slog.Error("Error while calling service", "err", err)
+		return err
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Query Goals Success",
+		"books":   books,
 	})
 }
