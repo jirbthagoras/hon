@@ -1,0 +1,25 @@
+services:
+  rabbitmq:
+    image: heidiks/rabbitmq-delayed-message-exchange:latest
+    container_name: hon_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+
+      RABBITMQ_LOAD_DEFINITIONS: /etc/rabbitmq/definitions.json
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./definitions.json:/etc/rabbitmq/definitions.json
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    env_file:
+      - .env
+    networks:
+      - hon_network
+
+volumes:
+  rabbitmq_data:
+networks:
+  hon_network:
+    driver: bridge

@@ -1,20 +1,21 @@
 {
-     "rabbit_version": "3.13.0",
-     "users": {
-          "name": "guest",
-          "password": "guest",
-          "tags": "administrator"
-     },
+     "users": [
+    {
+      "name": "guest",
+      "password": "guest",
+      "tags": "administrator"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "guest",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
      "vhosts": [ { "name": "/" } ],
-     "permissions": [
-          {
-               "user": "guest",
-               "vhost": "/",
-               "configure": ".*",
-               "write": ".*",
-               "read": ".*"
-          }
-     ],
      "exchanges": [
           {
                "name": "goal_exchange",
