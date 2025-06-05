@@ -14,6 +14,14 @@ type RequestCreateBook struct {
 	TotalPages int    `json:"total_pages" validate:"required"`
 }
 
+type ResponseGetBooks struct {
+	Id         int    `json:"id"`
+	Title      string `json:"title"`
+	Author     string `json:"author"`
+	TotalPages int    `json:"total_pages"`
+	Status     string `json:"status"`
+}
+
 type ResponseGetBook struct {
 	Id         int                    `json:"id"`
 	Title      string                 `json:"title"`

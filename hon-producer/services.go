@@ -128,9 +128,9 @@ func (s *ProducerService) CreateBook(userId int, req RequestCreateBook) error {
 	return nil
 }
 
-func (s *ProducerService) GetAllBooksByUserId(userId int) ([]*ResponseGetBook, error) {
+func (s *ProducerService) GetAllBooksByUserId(userId int) ([]*ResponseGetBooks, error) {
 	// Initialize var to place the book
-	var books []*ResponseGetBook
+	var books []*ResponseGetBooks
 
 	// Query
 	query := "SELECT id, title, author, total_pages, status FROM books WHERE user_id = ?"
@@ -155,7 +155,7 @@ func (s *ProducerService) GetAllBooksByUserId(userId int) ([]*ResponseGetBook, e
 
 	// Foreach-ing queried rows
 	for rows.Next() {
-		var book ResponseGetBook
+		var book ResponseGetBooks
 		err := rows.Scan(&book.Id, &book.Title, &book.Author, &book.TotalPages, &book.Status)
 		if err != nil {
 			slog.Error("Error querying", "err", err)
